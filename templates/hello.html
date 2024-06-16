@@ -36,7 +36,27 @@
 <body>
     <div id="map"></div>
 
+    {% with messages = get_flashed_messages() %}
+      {% if messages %}
+        <div class="mb-4 mt-4 mx-4">
+          {% for message in messages %}
+            <div class="alert alert-success">{{ message }}</div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
 
+    <div class="max-w-lg mx-auto bg-white p-8 rounded-lg shadow-lg my-10">
+      <h2 class="text-2xl font-bold mb-6">Upload Files</h2>
+      <form id="uploadForm" action="/upload" method="post" enctype="multipart/form-data" class="space-y-6">
+          <div class="dropzone" id="dropzone">
+              <p class="text-gray-500">Drag and drop files here or click to select files</p>
+              <input type="file" id="fileInput" name="files[]" multiple class="hidden">
+          </div>
+          <div class="preview" id="preview"></div>
+          <button type="submit" class="btn btn-primary w-full">Upload</button>
+      </form>
+    </div>
 
     <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
 
@@ -71,6 +91,46 @@
           });
 
           map.fitBounds(bounds);
+
+        const dropzone = document.getElementById('dropzone');
+        const fileInput = document.getElementById('fileInput');
+        const preview = document.getElementById('preview');
+
+        dropzone.addEventListener('click', () => fileInput.click());
+
+        dropzone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropzone.classList.add('dragover');
+        });
+
+        dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dragover'));
+
+        dropzone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropzone.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            fileInput.files = files; // Update the file input element
+            handleFiles(files);
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            handleFiles(e.target.files);
+        });
+
+        function handleFiles(files) {
+            preview.innerHTML = '';
+            for (const file of files) {
+                if (file.type.startsWith('image/')) {
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        const img = document.createElement('img');
+                        img.src = e.target.result;
+                        preview.appendChild(img);
+                    };
+                    reader.readAsDataURL(file);
+                }
+            }
+        }
     </script>
 </body>
 </html>
