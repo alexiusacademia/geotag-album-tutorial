@@ -66,7 +66,7 @@
       <div class="card-body">
         <h2 class="card-title">{{ image.name }}</h2>
       </div>
-      <figure><img src="{{ image.url }}" alt="{{ image.name }}" height="100%"></figure>
+      <figure><img src="{{ url_for('uploaded_photo', filename=image.name) }}" alt="{{ image.name }}" height="100%"></figure>
     </div>
 
     {% endfor %}
@@ -84,13 +84,16 @@
         // Create a bounds object
         var bounds = L.latLngBounds();
 
-         const images = {{ images | tojson }};
+        const images = {{ images | tojson }};
+
+        if (images.length > 0) {
           images.forEach(image => {
             var marker = L.marker([image.latitude, image.longitude]).addTo(map);
             bounds.extend(marker.getLatLng());
           });
 
-          map.fitBounds(bounds);
+        map.fitBounds(bounds);
+        }
 
         const dropzone = document.getElementById('dropzone');
         const fileInput = document.getElementById('fileInput');

@@ -1,5 +1,7 @@
 from flask import Flask, render_template
 from flask import request, redirect, flash, url_for
+from flask import send_from_directory
+import exifread
 from werkzeug.utils import secure_filename
 import os
 
@@ -14,40 +16,57 @@ def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 
+def get_exif_data(image_path):
+    with open(image_path, 'rb') as image_file:
+        tags = exifread.process_file(image_file)
+        return tags
+
+def get_geolocation(exif_data):
+    def convert_to_degress(value):
+        d = float(value[0].num) / float(value[0].den)
+        m = float(value[1].num) / float(value[1].den)
+        s = float(value[2].num) / float(value[2].den)
+
+        return d + (m / 60.0) + (s / 3600.0)
+
+    latitude = None
+    longitude = None
+
+    if 'GPS GPSLatitude' in exif_data and 'GPS GPSLongitude' in exif_data and \
+       'GPS GPSLatitudeRef' in exif_data and 'GPS GPSLongitudeRef' in exif_data:
+        lat_value = exif_data['GPS GPSLatitude'].values
+        lat_ref = exif_data['GPS GPSLatitudeRef'].values[0]
+        lon_value = exif_data['GPS GPSLongitude'].values
+        lon_ref = exif_data['GPS GPSLongitudeRef'].values[0]
+
+        latitude = convert_to_degress(lat_value)
+        if lat_ref != 'N':
+            latitude = -latitude
+
+        longitude = convert_to_degress(lon_value)
+        if lon_ref != 'E':
+            longitude = -longitude
+
+    return latitude, longitude
+
+
 @app.route("/")
 def index():
-    images = [
-        {
-            "name": "Calle Crisologo",
-            "url": "https://ik.imagekit.io/tvlk/blog/2017/11/Calle-Crisologo-by-night-750x469.jpg?tr=dpr-2,w-675,",
-            "latitude": 17.57278,
-            "longitude": 120.38889
-        },
-        {
-            "name": "Boracay",
-            "url": "https://www.rappler.com/tachyon/2022/07/boracay.jpg",
-            "latitude": 11.967222,
-            "longitude": 121.924722
-        },
-        {
-            "name": "Mayon Volcano",
-            "url": "https://gttp.imgix.net/266095/x/0/guide-to-mayon-volcano-in-albay-bicol-world-s-most-perfect-volcanic-cone-4.jpg?auto=compress%2Cformat&ch=Width%2CDPR&dpr=1&ixlib=php-3.3.0&w=883",
-            "latitude": 13.254722,
-            "longitude": 123.685833
-        },
-        {
-            "name": "Siargao Island",
-            "url": "https://www.agoda.com/wp-content/uploads/2020/01/Things-to-do-in-Siargao-Island-Cloud-9-surfing-area-in-General-Luna.jpg",
-            "latitude": 9.854167,
-            "longitude": 126.040278
-        },
-        {
-            "name": "Mt. Pinatubo",
-            "url": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQs5noQ1YdK7lM-h1KOfQ7opRjb90XSVD_s0Q&s",
-            "latitude": 15.143056,
-            "longitude": 120.349444
-        }
-    ]
+    image_files = os.listdir(app.config['UPLOAD_FOLDER'])
+    images = []
+
+    for img in image_files:
+        if allowed_file(img):
+            filename = os.path.join(app.config['UPLOAD_FOLDER'], img)
+            exif_data = get_exif_data(filename)
+            lat, lon = get_geolocation(exif_data)
+            if lat is not None:
+                images.append({
+                    'filename': filename,
+                    'latitude': lat,
+                    'longitude': lon,
+                    'name': img
+                })
 
     number_of_items = len(images)
 
@@ -61,13 +80,18 @@ def index():
         longitudes.append(image['longitude'])
 
     # Now calculate the averages of latitudes and longitudes
-    lat_average = sum(latitudes) / number_of_items
-    lon_average = sum(longitudes) / number_of_items
+    lat_average = sum(latitudes) / number_of_items if number_of_items > 0 else 0
+    lon_average = sum(longitudes) / number_of_items if number_of_items > 0 else 0
 
     return  render_template("hello.html",
                             images=images,
                             latitude=lat_average,
                             longitude=lon_average)
+
+
+@app.route("/uploads/<filename>")
+def uploaded_photo(filename):
+    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
 
 @app.route("/upload", methods=["POST"])
